@@ -39,23 +39,22 @@
     group: '{{ matchbox_config_group }}'
     mode: 0755
 
-- name: install pki...
-  become: yes
-  become_user: root
-  when: matchbox_config_pki_dir is defined
-  with_items:
-    - s: '{{ inventory_hostname }}-key.pem'
-      d: server.key
-    - s: '{{ inventory_hostname }}.pem'
-      d: server.crt
-    - s: ca.pem
-      d: ca.crt
-  copy:
-    src: '{{ matchbox_config_pki_dir }}/{{ item.s }}'
-    dest: '{{ matchbox_config_etc }}/{{ item.d }}'
-    owner: '{{ matchbox_config_user }}'
-    group: '{{ matchbox_config_group }}'
-    mode: '{{ item.m | default("0400") }}'
+- name: install keys/certs
+  when: matchbox_config_tls.enable
+  include_role:
+    name: andrewrothstein.tls
+  vars:
+    tls_become: yes
+    tls_become_user: root
+    tls_src: '{{ matchbox_config_tls.pki_dir }}'
+    tls_dest: '{{ matchbox_config_etc }}'
+    tls_dest_file_names:
+      ca: ca.crt
+      cert: server.crt
+      key: server.key
+    tls_dest_chmod:
+      owner: root
+      grp: root
 
 - name: configure matchbox environment
   become: yes
@@ -67,13 +66,20 @@
     group: '{{ matchbox_config_group }}'
     mode: '0400'
 
-- name: install coreos kernel binary assets
+- name: install fedora coreos kernel binary assets
   become: yes
   become_user: '{{ matchbox_config_user }}'
   with_items: '{{ matchbox_config_get_coreos | default([]) }}'
   command: '{{ matchbox_config_get_coreos_bin }} {{ item.channel }} {{ item.version }} {{ matchbox_config_assets_path }}'
   args:
-    creates: '{{ matchbox_config_assets_path }}/coreos/{{ item.version }}/coreos_production_pxe_image.cpio.gz'
+    creates: '{{ matchbox_config_assets_path }}/fedora-coreos/fedora-coreos-{{ item.version }}-metal.x86_64.raw.xz'
 
+- name: install flatcar kernel binary assets
+  become: yes
+  become_user: '{{ matchbox_config_user }}'
+  with_items: '{{ matchbox_config_get_flatcar | default([]) }}'
+  command: '{{ matchbox_config_get_flatcar_bin }} {{ item.channel }} {{ item.version }} {{ matchbox_config_assets_path }}'
+  args:
+    creates: '{{ matchbox_config_assets_path }}/flatcar/{{ item.version }}/flatcar_production_pxe_image.cpio.gz'
 
 - include_tasks: '{{ matchbox_supervisor | default("systemd") }}.yml'
